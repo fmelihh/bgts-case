@@ -1,5 +1,7 @@
+import asyncio
+
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 
 from bgts_case.secret import secrets
@@ -14,16 +16,25 @@ model = ChatOpenAI(
     temperature=0,
 )
 
-graph = create_agent(
-    model=model,
-    tools=[],
-    system_prompt=SYSTEM_PROMPT,
+mcp_client = MultiServerMCPClient(
+    {
+        "tickets": {
+            "url": secrets.mcp_server_url,
+            "transport": "streamable_http",
+        },
+    }
 )
 
 
-def run_agent() -> None:
-    """Entry point: invoke the LangGraph agent once with a sample prompt."""
-    result = graph.invoke(
-        {"messages": [HumanMessage(content="Python'da fibonacci fonksiyonu yaz.")]}
+async def _build_graph():
+    tools = await mcp_client.get_tools()
+    return create_agent(
+        model=model,
+        tools=tools,
+        system_prompt=SYSTEM_PROMPT,
     )
-    print(result["messages"][-1].content)
+
+
+graph = asyncio.run(_build_graph())
+
+__all__ = ["graph"]

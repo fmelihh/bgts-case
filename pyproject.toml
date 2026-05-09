@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.14.0",
     "fastmcp>=3.2.4",
     "langchain>=1.0.0",
+    "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=0.3.0",
     "langgraph>=1.1.10",
     "langgraph-cli[inmem]>=0.4.25",
@@ -17,7 +18,6 @@ dependencies = [
 ]
 
 [project.scripts]
-run-agent = "bgts_case.agents.main:run_agent"
 seed-tickets = "bgts_case.mcp_server.seed:seed_tickets"
 run-ticket-mcp-server = "bgts_case.mcp_server.server:run_ticket_mcp_server"
 

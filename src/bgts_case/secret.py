@@ -13,6 +13,7 @@ class Secrets(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     )
+    mcp_server_url: str = "http://localhost:8765/mcp/"
 
 
 secrets = Secrets()  # type: ignore[call-arg]
