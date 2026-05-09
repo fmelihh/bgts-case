@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/bgts_case/main.py:graph"
+  },
+  "env": ".env"
+}

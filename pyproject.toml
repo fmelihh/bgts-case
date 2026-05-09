@@ -1,0 +1,31 @@
+[project]
+name = "bgts-case"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.14.0",
+    "fastmcp>=3.2.4",
+    "langchain>=1.0.0",
+    "langchain-openai>=0.3.0",
+    "langgraph>=1.1.10",
+    "langgraph-cli[inmem]>=0.4.25",
+    "psycopg[binary]>=3.2.0",
+    "pydantic-settings>=2.6.1",
+    "sqlalchemy>=2.0.36",
+]
+
+[project.scripts]
+run-agent = "bgts_case.agents.main:run_agent"
+seed-tickets = "bgts_case.mcp_server.seed:seed_tickets"
+run-ticket-mcp-server = "bgts_case.mcp_server.server:run_ticket_mcp_server"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src"]
