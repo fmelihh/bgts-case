@@ -13,3 +13,4 @@ wheels/
 data/
 .langgraph_api/
 .env
+.Ds_Store

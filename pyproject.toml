@@ -8,13 +8,21 @@ dependencies = [
     "alembic>=1.14.0",
     "fastmcp>=3.2.4",
     "langchain>=1.0.0",
+    "langchain-community>=0.4.1",
     "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=0.3.0",
+    "langchain-text-splitters>=1.1.2",
     "langgraph>=1.1.10",
     "langgraph-cli[inmem]>=0.4.25",
+    "loguru>=0.7.3",
+    "markdown>=3.10.2",
+    "pandas>=3.0.2",
+    "pdfplumber>=0.11.9",
     "psycopg[binary]>=3.2.0",
     "pydantic-settings>=2.6.1",
+    "pymupdf4llm>=1.27.2.3",
     "sqlalchemy>=2.0.36",
+    "unstructured>=0.22.27",
 ]
 
 [project.scripts]
@@ -29,3 +37,8 @@ build-backend = "setuptools.build_meta"
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+]
