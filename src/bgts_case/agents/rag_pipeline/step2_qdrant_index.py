@@ -100,7 +100,9 @@ def _embed_batch(*, openai: OpenAI, texts: list[str]) -> list[list[float]]:
     resp = openai.embeddings.create(
         model=DENSE_MODEL,
         input=texts,
+        dimensions=DENSE_DIM,
     )
+
     elapsed = time.perf_counter() - t0
     logger.debug(
         f"_embed_batch: {len(texts)} texts in {elapsed:.2f}s "

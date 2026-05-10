@@ -33,4 +33,7 @@ def run_pipeline():
         raise e
 
 
+if __name__ == "__main__":
+    run_pipeline()
+
 __all__ = ["run_pipeline"]
