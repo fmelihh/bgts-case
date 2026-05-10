@@ -2,14 +2,14 @@
 
 help:
 	@echo "Available targets:"
-	@echo "  install      Install Python dependencies with uv"
-	@echo "  dev          Run the LangGraph dev server"
-	@echo "  up           Start docker-compose services (postgres + mlflow)"
-	@echo "  down         Stop docker-compose services"
-	@echo "  logs         Tail docker-compose logs"
-	@echo "  migrate      Apply pending alembic migrations (upgrade head)"
-	@echo "  seed         Seed itsm tickets into Postgres"
-	@echo "  mcp-server   Run the ITSM ticket MCP server (HTTP)"
+	@echo "  install        Install Python dependencies with uv"
+	@echo "  dev            Run the LangGraph dev server"
+	@echo "  up             Start docker-compose services (postgres + mlflow)"
+	@echo "  down           Stop docker-compose services"
+	@echo "  logs           Tail docker-compose logs"
+	@echo "  migrate        Apply pending alembic migrations (upgrade head)"
+	@echo "  seed           Seed itsm tickets into Postgres"
+	@echo "  mcp-server     Run the ITSM ticket MCP server (HTTP)"
 
 install:
 	uv sync

@@ -1,12 +1,15 @@
-"""RAG ingestion pipeline.
+"""Step 1 of the RAG ingestion pipeline: PDF -> chunked Documents.
 
 Turns PDF knowledge base files into indexable LangChain Documents:
 
-    PDF -> markdown (pymupdf4llm)
+    PDF -> markdown (pymupdf4llm, per-page)
         -> tables  : UnstructuredMarkdownLoader(mode='elements')
                      -> KV-lines + RecursiveCharacterTextSplitter
         -> text    : MarkdownHeaderTextSplitter
                      -> RecursiveCharacterTextSplitter
+
+The public entry point is :func:`process_pdf`. The orchestrator drives this
+step and will compose later steps (embedding, indexing) around it.
 """
 
 from __future__ import annotations
@@ -52,45 +55,59 @@ _TEXT_SPLITTER = RecursiveCharacterTextSplitter(
 _MD_TABLE_RE = re.compile(r"^\|.*\n\|[\s\-:|]+\|\n(?:\|.*\n?)+", flags=re.MULTILINE)
 
 
-def pdf_to_markdown(pdf_path: str | Path) -> str:
-    """Render a PDF to markdown using pymupdf4llm.
+def pdf_to_page_markdowns(pdf_path: str | Path) -> list[dict]:
+    """Render a PDF to per-page markdown dicts using pymupdf4llm.
 
-    pymupdf4llm.to_markdown is declared as ``*args, **kwargs`` so its return
-    type is untyped; cast to ``str`` (we never pass ``page_chunks=True``).
+    Calls ``pymupdf4llm.to_markdown(..., page_chunks=True)``, which returns
+    one dict per page with the page's markdown under ``"text"`` plus pymupdf
+    metadata. We process pages individually so downstream Documents can carry
+    1-based ``page_number`` and ``total_pages`` in their metadata.
     """
     pdf_path = Path(pdf_path)
     pdf_size_kb = pdf_path.stat().st_size / 1024 if pdf_path.exists() else 0
-    logger.debug(f"pdf_to_markdown: rendering {pdf_path.name} ({pdf_size_kb:.1f} KB)")
-    t0 = time.perf_counter()
-    md = cast(str, pymupdf4llm.to_markdown(str(pdf_path)))
-    elapsed = time.perf_counter() - t0
-    logger.info(
-        f"pdf_to_markdown: {pdf_path.name} -> {len(md)} chars markdown in {elapsed:.2f}s"
+    logger.debug(
+        f"pdf_to_page_markdowns: rendering {pdf_path.name} ({pdf_size_kb:.1f} KB)"
     )
-    return md
+    t0 = time.perf_counter()
+    pages = cast(list[dict], pymupdf4llm.to_markdown(str(pdf_path), page_chunks=True))
+    elapsed = time.perf_counter() - t0
+    total_chars = sum(len(p.get("text", "")) for p in pages)
+    logger.info(
+        f"pdf_to_page_markdowns: {pdf_path.name} -> {len(pages)} pages, "
+        f"{total_chars} chars markdown in {elapsed:.2f}s"
+    )
+    return pages
 
 
 def _clean_heading(text: str) -> str:
     return text.strip().strip("*").strip()
 
 
-def _derive_doc_title(meta: dict) -> str:
+def _derive_doc_title(meta: dict, fallback: str = "Unknown Document") -> str:
     """Pick the most specific heading available as the doc_title."""
     for key in ("h3", "h2", "h1"):
         if meta.get(key):
             return _clean_heading(meta[key])
-    return "Unknown Document"
+    return fallback
 
 
 def load_split_documents(
     markdown_path: str | Path,
-) -> tuple[list[Document], list[Document]]:
+    *,
+    initial_doc_title: str = "Unknown Document",
+) -> tuple[list[Document], list[Document], str]:
     """Split a markdown file into table and narrative Documents.
 
     - Tables come from UnstructuredMarkdownLoader(mode='elements') so we keep
       the rendered HTML in metadata['text_as_html'].
     - Narrative comes from MarkdownHeaderTextSplitter with embedded markdown
       tables stripped (they are already covered by the elements loader).
+
+    ``initial_doc_title`` seeds the running section title and is also used as
+    the fallback when a header chunk has no heading metadata — this lets
+    page-by-page callers carry the running heading across page boundaries.
+    The final running section title is returned as the third tuple element so
+    the caller can feed it into the next page's call.
     """
     markdown_path = str(markdown_path)
     logger.debug(f"load_split_documents: loading elements from {markdown_path}")
@@ -110,7 +127,7 @@ def load_split_documents(
     logger.debug(f"load_split_documents: element categories = {category_counts}")
 
     table_docs: list[Document] = []
-    current_section_title = "Unknown Document"
+    current_section_title = initial_doc_title
     title_count = 0
 
     for doc in el_docs:
@@ -159,7 +176,9 @@ def load_split_documents(
                 page_content=body,
                 metadata={
                     **hc.metadata,
-                    "doc_title": _derive_doc_title(hc.metadata),
+                    "doc_title": _derive_doc_title(
+                        hc.metadata, fallback=initial_doc_title
+                    ),
                     "source": markdown_path,
                 },
             )
@@ -168,9 +187,10 @@ def load_split_documents(
     logger.info(
         f"load_split_documents: {markdown_path} -> {len(table_docs)} table docs, "
         f"{len(text_docs)} narrative sections "
-        f"({title_count} titles seen, {skipped_empty} empty sections skipped)"
+        f"({title_count} titles seen, {skipped_empty} empty sections skipped, "
+        f"final_section='{current_section_title}')"
     )
-    return table_docs, text_docs
+    return table_docs, text_docs, current_section_title
 
 
 def is_simple_table(html_table: str) -> tuple[bool, int]:
@@ -261,12 +281,12 @@ def chunk_documents(
     table_docs: list[Document],
     text_docs: list[Document],
     *,
-    alert: AlertFn = mock_slack_alert,
+    alert_fn: AlertFn = mock_slack_alert,
 ) -> list[Document]:
     """Turn raw table/text Documents into indexable chunks.
 
     - Simple tables -> KV chunks with header context, no overlap.
-    - Tables with nested tables -> skipped (no chunk emitted); ``alert`` is
+    - Tables with nested tables -> skipped (no chunk emitted); ``alert_fn`` is
       invoked with a human-readable message + structured context kwargs.
     - Narrative -> RecursiveCharacterTextSplitter with overlap.
 
@@ -279,6 +299,7 @@ def chunk_documents(
     text_chunks_added = 0
     skipped_empty_text = 0
 
+    ## Processing TEXT DOCUMENTS ##
     for tdoc in text_docs:
         if not tdoc.page_content.strip():
             skipped_empty_text += 1
@@ -308,6 +329,7 @@ def chunk_documents(
     simple_tables = 0
     skipped_empty_tables = 0
 
+    ## Processing TABLE DOCUMENTS ##
     for tdoc in table_docs:
         html_table = tdoc.metadata.get("text_as_html") or ""
         doc_title = tdoc.metadata.get("doc_title", "Unknown Document")
@@ -316,7 +338,7 @@ def chunk_documents(
         simple, nested_count = is_simple_table(html_table)
         if not simple:
             nested_tables += 1
-            alert(
+            alert_fn(
                 "Nested table detected; skipping (not chunked).",
                 channel="rag-ingest",
                 level="warning",
@@ -340,6 +362,10 @@ def chunk_documents(
         extra_meta: dict = {"source_category": "Table"}
         if source:
             extra_meta["source"] = source
+        for key in ("page_number", "total_pages", "source_pdf", "source_pdf_name"):
+            val = tdoc.metadata.get(key)
+            if val is not None:
+                extra_meta[key] = val
 
         new_chunks = split_kv_table(
             lines=lines,
@@ -365,12 +391,18 @@ def chunk_documents(
 def process_pdf(
     pdf_path: str | Path,
     *,
-    alert: AlertFn = mock_slack_alert,
+    alert_fn: AlertFn = mock_slack_alert,
 ) -> list[Document]:
-    """Full pipeline for a single PDF: PDF -> markdown -> chunks.
+    """Full pipeline for a single PDF: PDF -> per-page markdown -> chunks.
 
-    The intermediate markdown is written into a ``TemporaryDirectory`` so it
-    is removed automatically when the ``with`` block exits — no manual unlink.
+    Pages are processed one at a time so every emitted Document carries
+    ``page_number`` (1-based) and ``total_pages`` in its metadata. The running
+    section title from :func:`load_split_documents` is threaded across page
+    boundaries via ``initial_doc_title`` so content on a page that opens
+    without its own heading inherits the heading from the previous page.
+
+    Each page's markdown is written into a shared ``TemporaryDirectory`` so
+    everything is removed when the ``with`` block exits — no manual unlink.
 
     ``alert`` is forwarded to :func:`chunk_documents` and fires for nested
     tables. Default is :func:`mock_slack_alert`.
@@ -379,26 +411,45 @@ def process_pdf(
     logger.info(f"process_pdf: START {pdf_path}")
     t_total = time.perf_counter()
 
-    markdown = pdf_to_markdown(pdf_path)
+    pages = pdf_to_page_markdowns(pdf_path)
+    total_pages = len(pages)
+
+    table_docs: list[Document] = []
+    text_docs: list[Document] = []
+    running_title = "Unknown Document"
 
     with tempfile.TemporaryDirectory(prefix="bgts_rag_") as tmpdir:
-        tmp_path = Path(tmpdir) / f"{pdf_path.stem}.md"
-        tmp_path.write_text(markdown, encoding="utf-8")
-        logger.debug(f"process_pdf: wrote markdown to {tmp_path}")
-        table_docs, text_docs = load_split_documents(tmp_path)
+        tmpdir_path = Path(tmpdir)
+        for idx, page in enumerate(pages):
+            page_number = idx + 1
+            page_md = page.get("text", "")
+            tmp_path = tmpdir_path / f"{pdf_path.stem}_p{page_number}.md"
+            tmp_path.write_text(page_md, encoding="utf-8")
+            logger.debug(
+                f"process_pdf: wrote page {page_number}/{total_pages} markdown "
+                f"to {tmp_path} ({len(page_md)} chars)"
+            )
 
-    for doc in table_docs + text_docs:
-        doc.metadata["source_pdf"] = str(pdf_path)
-        doc.metadata["source_pdf_name"] = pdf_path.name
+            page_table_docs, page_text_docs, running_title = load_split_documents(
+                tmp_path, initial_doc_title=running_title
+            )
+            for doc in page_table_docs + page_text_docs:
+                doc.metadata["page_number"] = page_number
+                doc.metadata["total_pages"] = total_pages
+                doc.metadata["source_pdf"] = str(pdf_path)
+                doc.metadata["source_pdf_name"] = pdf_path.name
 
-    chunks = chunk_documents(table_docs=table_docs, text_docs=text_docs, alert=alert)
-    for c in chunks:
-        c.metadata.setdefault("source_pdf", str(pdf_path))
-        c.metadata.setdefault("source_pdf_name", pdf_path.name)
+            table_docs.extend(page_table_docs)
+            text_docs.extend(page_text_docs)
+
+    chunks = chunk_documents(
+        table_docs=table_docs, text_docs=text_docs, alert_fn=alert_fn
+    )
 
     elapsed = time.perf_counter() - t_total
     logger.success(
-        f"process_pdf: DONE {pdf_path.name} -> {len(chunks)} chunks in {elapsed:.2f}s"
+        f"process_pdf: DONE {pdf_path.name} -> {len(chunks)} chunks "
+        f"across {total_pages} pages in {elapsed:.2f}s"
     )
     return chunks
 
