@@ -11,7 +11,5 @@ def get_ticket_by_id(ticket_id: str) -> TicketDTO | None:
     consume the resulting DTO.
     """
     with get_session() as session:
-        ticket = (
-            session.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-        )
+        ticket = session.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
         return ticket.to_dto() if ticket is not None else None

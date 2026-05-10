@@ -10,9 +10,7 @@ class Secrets(BaseSettings):
     )
 
     fireworks_api_key: SecretStr
-    database_url: str = (
-        "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
-    )
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     mcp_server_url: str = "http://localhost:8765/mcp/"
 
 
