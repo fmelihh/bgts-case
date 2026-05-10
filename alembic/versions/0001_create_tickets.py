@@ -19,21 +19,23 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-ticket_status = sa.Enum(
+ticket_status = postgresql.ENUM(
     "OPEN",
     "INVESTIGATING",
     "RESOLVED",
     "CLOSED",
     name="ticket_status",
+    create_type=False,
 )
-ticket_priority = sa.Enum(
+ticket_priority = postgresql.ENUM(
     "LOW",
     "MEDIUM",
     "HIGH",
     "CRITICAL",
     name="ticket_priority",
+    create_type=False,
 )
-ticket_category = sa.Enum(
+ticket_category = postgresql.ENUM(
     "NETWORK_WAN",
     "FIREWALL",
     "VPN",
@@ -45,6 +47,7 @@ ticket_category = sa.Enum(
     "SECURITY",
     "EMAIL",
     name="ticket_category",
+    create_type=False,
 )
 
 

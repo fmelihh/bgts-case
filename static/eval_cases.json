@@ -1,0 +1,689 @@
+{
+  "meta": {
+    "aciklama": "ITSM RCA Agent - Başarı Metrikleri ve Eval Case'leri",
+    "versiyon": "1.0",
+    "toplam_case": 25,
+    "kategoriler": [
+      "RAG Doğruluğu",
+      "RCA Kalitesi",
+      "Tool Çağrı",
+      "Negatif Test"
+    ],
+    "kategori_dagilim": {
+      "RAG Doğruluğu": 10,
+      "RCA Kalitesi": 5,
+      "Tool Çağrı": 5,
+      "Negatif Test": 5
+    }
+  },
+  "cases": [
+    {
+      "case_id": "RAG-001",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Kolay",
+      "aciklama": "BGP oturum düşüşü için doğrudan KB referansı",
+      "kullanici_girdisi": "BGP oturumu düştü, %BGP-5-ADJCHANGE mesajı görüyorum. Ne yapmalıyım?",
+      "beklenen_kb_kaynaklar": [
+        "KB-01_BGP_Troubleshooting.pdf"
+      ],
+      "beklenen_sayfalar": [
+        1,
+        2
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "ADJCHANGE",
+        "hold timer",
+        "Established",
+        "show bgp summary",
+        "BGP durum makinesi"
+      ],
+      "beklenmemesi_gereken": [
+        "DHCP",
+        "Wireless",
+        "STP"
+      ],
+      "min_rag_skoru": 0.75,
+      "referans_ticket": "INC-2024-007"
+    },
+    {
+      "case_id": "RAG-002",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Kolay",
+      "aciklama": "Firewall CPU spike için doğru KB + log chunk bulunmalı",
+      "kullanici_girdisi": "Fortigate 600E'de CPU %95'e çıktı, IPS motoru SYN flood tespit ediyor.",
+      "beklenen_kb_kaynaklar": [
+        "KB-02_Firewall_Policy_Referans.pdf",
+        "KB-05_Incident_Log_Arsivi.pdf"
+      ],
+      "beklenen_sayfalar": [
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "SYN flood",
+        "session table",
+        "CPU",
+        "diagnose ips anomaly list",
+        "IPS engine"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "DHCP",
+        "DNS"
+      ],
+      "min_rag_skoru": 0.78,
+      "referans_ticket": "INC-2024-005"
+    },
+    {
+      "case_id": "RAG-003",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Kolay",
+      "aciklama": "VPN hata kodu 429 için spesifik tablo satırı gelmeli",
+      "kullanici_girdisi": "AnyConnect bağlanırken 'Error 429: Too Many Requests' hatası alıyorum.",
+      "beklenen_kb_kaynaklar": [
+        "KB-03_VPN_Hata_Kodlari.pdf"
+      ],
+      "beklenen_sayfalar": [
+        1
+      ],
+      "beklenen_chunk_tipler": [
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "429",
+        "rate limit",
+        "firewall policy",
+        "gateway"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "STP",
+        "DDoS"
+      ],
+      "min_rag_skoru": 0.82,
+      "referans_ticket": "INC-2024-003"
+    },
+    {
+      "case_id": "RAG-004",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Orta",
+      "aciklama": "DHCP havuz tükenmesi için hem KB-04 hem KB-08 gelmeli",
+      "kullanici_girdisi": "VLAN 20'de yeni cihazlar IP alamıyor, DHCPNAK mesajları görüyorum.",
+      "beklenen_kb_kaynaklar": [
+        "KB-04_DNS_DHCP_Yonetim.pdf",
+        "KB-08_IPAM_Yonetimi.pdf"
+      ],
+      "beklenen_sayfalar": [
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "text"
+      ],
+      "beklenen_cevap_icermeli": [
+        "DHCPNAK",
+        "pool exhausted",
+        "lease",
+        "169.254",
+        "Get-DhcpServerv4ScopeStatistics"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "STP",
+        "VPN"
+      ],
+      "min_rag_skoru": 0.72,
+      "referans_ticket": "INC-2024-008"
+    },
+    {
+      "case_id": "RAG-005",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Orta",
+      "aciklama": "SD-WAN SLA ihlali için KB-06 spesifik log chunk gelmeli",
+      "kullanici_girdisi": "SD-WAN'da ERP trafiği MPLS yerine internet hattından gidiyor, latency 340ms.",
+      "beklenen_kb_kaynaklar": [
+        "KB-06_SDWAN_Operasyon.pdf"
+      ],
+      "beklenen_sayfalar": [
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "SLA violation",
+        "OMP",
+        "policy mismatch",
+        "BFD",
+        "show sdwan bfd sessions"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "Firewall",
+        "DHCP"
+      ],
+      "min_rag_skoru": 0.74,
+      "referans_ticket": "INC-2024-010"
+    },
+    {
+      "case_id": "RAG-006",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Orta",
+      "aciklama": "Network loop / STP için KB-07 ve KB-05 arşiv chunk'ı gelmeli",
+      "kullanici_girdisi": "MACFLAP_NOTIF hatası alıyorum, switch CPU %99'a çıktı, broadcast storm var.",
+      "beklenen_kb_kaynaklar": [
+        "KB-07_Switch_STP_Runbook.pdf",
+        "KB-05_Incident_Log_Arsivi.pdf"
+      ],
+      "beklenen_sayfalar": [
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "MACFLAP",
+        "broadcast storm",
+        "loop",
+        "spanning-tree bpduguard",
+        "portfast"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "VPN",
+        "DHCP"
+      ],
+      "min_rag_skoru": 0.76,
+      "referans_ticket": "INC-2024-009"
+    },
+    {
+      "case_id": "RAG-007",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Orta",
+      "aciklama": "Wi-Fi AP offline → KB-10 PoE log chunk'ı + envanter tablosu gelmeli",
+      "kullanici_girdisi": "B3 bloğundaki tüm AP'ler aynı anda offline oldu, Meraki dashboard'da görünmüyor.",
+      "beklenen_kb_kaynaklar": [
+        "KB-10_Wireless_Altyapi.pdf"
+      ],
+      "beklenen_sayfalar": [
+        1,
+        2
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table"
+      ],
+      "beklenen_cevap_icermeli": [
+        "PoE",
+        "show power inline",
+        "wan_connectivity_check_failed",
+        "switch",
+        "budget"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "Firewall",
+        "IPSec"
+      ],
+      "min_rag_skoru": 0.73,
+      "referans_ticket": "INC-2024-006"
+    },
+    {
+      "case_id": "RAG-008",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Zor",
+      "aciklama": "DNS disk doluluk → KB-04 Event ID + PowerShell komutu birlikte gelmeli",
+      "kullanici_girdisi": "Event ID 4015 alıyorum, DNS servisi başlamıyor. Sunucu diski dolu olabilir.",
+      "beklenen_kb_kaynaklar": [
+        "KB-04_DNS_DHCP_Yonetim.pdf"
+      ],
+      "beklenen_sayfalar": [
+        2
+      ],
+      "beklenen_chunk_tipler": [
+        "log"
+      ],
+      "beklenen_cevap_icermeli": [
+        "Event ID 4015",
+        "disk",
+        "Get-ChildItem",
+        "dns\\*.log",
+        "repadmin"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "VPN",
+        "Wireless"
+      ],
+      "min_rag_skoru": 0.7,
+      "referans_ticket": "INC-2024-004"
+    },
+    {
+      "case_id": "RAG-009",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Zor",
+      "aciklama": "NOC eskalasyon kararı → KB-09 karar ağacı + öncelik matrisi gelmeli",
+      "kullanici_girdisi": "P1 incident var, L2 mühendis 2 saattir çözemedi. Ne yapmalıyım, kimi aramalıyım?",
+      "beklenen_kb_kaynaklar": [
+        "KB-09_NOC_Eskalasyon.pdf"
+      ],
+      "beklenen_sayfalar": [
+        1,
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "table",
+        "text"
+      ],
+      "beklenen_cevap_icermeli": [
+        "L3",
+        "Network Mimarı",
+        "Cisco TAC",
+        "P1",
+        "4 saat"
+      ],
+      "beklenmemesi_gereken": [
+        "BGP",
+        "DHCP",
+        "STP"
+      ],
+      "min_rag_skoru": 0.71,
+      "referans_ticket": null
+    },
+    {
+      "case_id": "RAG-010",
+      "kategori": "RAG Doğruluğu",
+      "zorluk": "Zor",
+      "aciklama": "Çoklu KB: BGP failover + firewall log + eskalasyon prosedürü aynı anda",
+      "kullanici_girdisi": "Gece BGP düştü, yedek hat devreye girmedi, firewall log'larında SYN flood var. 500 kullanıcı etkilendi.",
+      "beklenen_kb_kaynaklar": [
+        "KB-01_BGP_Troubleshooting.pdf",
+        "KB-02_Firewall_Policy_Referans.pdf",
+        "KB-09_NOC_Eskalasyon.pdf"
+      ],
+      "beklenen_sayfalar": [
+        1,
+        2,
+        3
+      ],
+      "beklenen_chunk_tipler": [
+        "log",
+        "table",
+        "text"
+      ],
+      "beklenen_cevap_icermeli": [
+        "BGP",
+        "failover",
+        "SYN flood",
+        "P1",
+        "eskalasyon",
+        "Cisco TAC"
+      ],
+      "beklenmemesi_gereken": [
+        "DHCP",
+        "Wi-Fi",
+        "IPAM"
+      ],
+      "min_rag_skoru": 0.68,
+      "referans_ticket": "INC-2024-007"
+    },
+    {
+      "case_id": "RCA-001",
+      "kategori": "RCA Kalitesi",
+      "zorluk": "Kolay",
+      "aciklama": "BGP düşüşü için tam RCA raporu formatı",
+      "kullanici_girdisi": "INC-2024-007 numaralı ticket için RCA raporu üret.",
+      "referans_ticket": "INC-2024-007",
+      "beklenen_rca_bolumler": [
+        "Olay Özeti",
+        "Zaman Çizelgesi",
+        "Kök Neden Analizi",
+        "Kısa Vadeli Çözüm",
+        "Uzun Vadeli Düzeltici Aksiyon",
+        "Önleyici Tedbirler"
+      ],
+      "beklenen_teknik_detaylar": [
+        "BGP community",
+        "failover",
+        "ISP",
+        "hold timer"
+      ],
+      "beklenen_kb_referanslar": [
+        "KB-01_BGP_Troubleshooting.pdf"
+      ],
+      "rca_min_kelime_sayisi": 300,
+      "rca_max_kelime_sayisi": 800,
+      "deger_lendirme_kriterleri": {
+        "kok_neden_bulunmali": true,
+        "5_why_veya_equivalent": true,
+        "onleyici_tedbir_olmali": true,
+        "teknik_log_referansi_olmali": true
+      }
+    },
+    {
+      "case_id": "RCA-002",
+      "kategori": "RCA Kalitesi",
+      "zorluk": "Orta",
+      "aciklama": "DHCP tükenmesi RCA - IoT cihaz büyümesi kök neden",
+      "kullanici_girdisi": "INC-2024-008 için kök neden analizi yap. Neden oldu, tekrar yaşanmaması için ne yapmalıyız?",
+      "referans_ticket": "INC-2024-008",
+      "beklenen_rca_bolumler": [
+        "Kök Neden Analizi",
+        "Önleyici Tedbirler"
+      ],
+      "beklenen_teknik_detaylar": [
+        "lease süresi",
+        "IoT",
+        "VLAN segmentasyonu",
+        "scope genişletme"
+      ],
+      "beklenen_kb_referanslar": [
+        "KB-04_DNS_DHCP_Yonetim.pdf",
+        "KB-08_IPAM_Yonetimi.pdf"
+      ],
+      "rca_min_kelime_sayisi": 200,
+      "rca_max_kelime_sayisi": 600,
+      "deger_lendirme_kriterleri": {
+        "kok_neden_bulunmali": true,
+        "5_why_veya_equivalent": false,
+        "onleyici_tedbir_olmali": true,
+        "teknik_log_referansi_olmali": true
+      }
+    },
+    {
+      "case_id": "RCA-003",
+      "kategori": "RCA Kalitesi",
+      "zorluk": "Orta",
+      "aciklama": "Network loop RCA - yönetilemeyen switch politika eksikliği",
+      "kullanici_girdisi": "Depo katındaki broadcast storm olayını analiz et. Kök neden ve öneriler nelerdir?",
+      "referans_ticket": "INC-2024-009",
+      "beklenen_rca_bolumler": [
+        "Kök Neden Analizi",
+        "Kısa Vadeli Çözüm",
+        "Uzun Vadeli Düzeltici Aksiyon"
+      ],
+      "beklenen_teknik_detaylar": [
+        "BPDU Guard",
+        "PortFast",
+        "yönetilemeyen switch",
+        "politika"
+      ],
+      "beklenen_kb_referanslar": [
+        "KB-07_Switch_STP_Runbook.pdf"
+      ],
+      "rca_min_kelime_sayisi": 200,
+      "rca_max_kelime_sayisi": 600,
+      "deger_lendirme_kriterleri": {
+        "kok_neden_bulunmali": true,
+        "5_why_veya_equivalent": false,
+        "onleyici_tedbir_olmali": true,
+        "teknik_log_referansi_olmali": true
+      }
+    },
+    {
+      "case_id": "RCA-004",
+      "kategori": "RCA Kalitesi",
+      "zorluk": "Zor",
+      "aciklama": "Karmaşık çok bileşenli olay - BGP + FW + DDoS aynı anda",
+      "kullanici_girdisi": "Bugün sabah hem BGP düştü hem firewall CPU spike yaptı hem de VPN çalışmadı. Bunlar birbirine bağlı mı? RCA yap.",
+      "referans_ticket": null,
+      "ilgili_ticketlar": [
+        "INC-2024-005",
+        "INC-2024-007",
+        "INC-2024-003"
+      ],
+      "beklenen_rca_bolumler": [
+        "Olay Özeti",
+        "Kök Neden Analizi",
+        "Bileşenler Arası İlişki",
+        "Önleyici Tedbirler"
+      ],
+      "beklenen_teknik_detaylar": [
+        "DDoS",
+        "BGP session",
+        "firewall CPU",
+        "VPN gateway",
+        "cascade failure"
+      ],
+      "beklenen_kb_referanslar": [
+        "KB-01_BGP_Troubleshooting.pdf",
+        "KB-02_Firewall_Policy_Referans.pdf",
+        "KB-03_VPN_Hata_Kodlari.pdf"
+      ],
+      "rca_min_kelime_sayisi": 400,
+      "rca_max_kelime_sayisi": 1000,
+      "deger_lendirme_kriterleri": {
+        "kok_neden_bulunmali": true,
+        "5_why_veya_equivalent": true,
+        "onleyici_tedbir_olmali": true,
+        "teknik_log_referansi_olmali": true,
+        "cascade_iliskisi_aciklanmali": true
+      }
+    },
+    {
+      "case_id": "RCA-005",
+      "kategori": "RCA Kalitesi",
+      "zorluk": "Zor",
+      "aciklama": "SD-WAN policy hatası RCA - değişiklik yönetimi eksikliği",
+      "kullanici_girdisi": "SD-WAN policy güncellemesi sonrası ERP çalışmadı. Değişiklik yönetimi sürecinde ne yanlış gitti?",
+      "referans_ticket": "INC-2024-010",
+      "beklenen_rca_bolumler": [
+        "Kök Neden Analizi",
+        "Değişiklik Yönetimi Değerlendirmesi",
+        "Önleyici Tedbirler"
+      ],
+      "beklenen_teknik_detaylar": [
+        "policy mismatch",
+        "OMP",
+        "BFD",
+        "doğrulama checklist",
+        "rollback"
+      ],
+      "beklenen_kb_referanslar": [
+        "KB-06_SDWAN_Operasyon.pdf"
+      ],
+      "rca_min_kelime_sayisi": 300,
+      "rca_max_kelime_sayisi": 700,
+      "deger_lendirme_kriterleri": {
+        "kok_neden_bulunmali": true,
+        "5_why_veya_equivalent": true,
+        "onleyici_tedbir_olmali": true,
+        "teknik_log_referansi_olmali": true
+      }
+    },
+    {
+      "case_id": "TOOL-001",
+      "kategori": "Tool Çağrı",
+      "zorluk": "Kolay",
+      "aciklama": "Açık ticket listesi sorgusu - ITSM tool çağrılmalı",
+      "kullanici_girdisi": "Şu an açık olan kritik ağ ticketlarını listele.",
+      "beklenen_tool_cagrisi": "get_tickets",
+      "beklenen_tool_argumanlari": {
+        "durum": [
+          "Açık",
+          "İnceleniyor"
+        ],
+        "oncelik": "Kritik",
+        "kategori": "Network"
+      },
+      "beklenmemesi_gereken_tool": "rag_search",
+      "beklenen_cevap_icermeli": [
+        "INC-",
+        "Kritik",
+        "Açık"
+      ],
+      "max_tool_cagrisi": 2
+    },
+    {
+      "case_id": "TOOL-002",
+      "kategori": "Tool Çağrı",
+      "zorluk": "Kolay",
+      "aciklama": "Spesifik ticket detayı - get_ticket_by_id çağrılmalı",
+      "kullanici_girdisi": "INC-2024-005 numaralı ticket'ın detaylarını göster.",
+      "beklenen_tool_cagrisi": "get_ticket_by_id",
+      "beklenen_tool_argumanlari": {
+        "ticket_id": "INC-2024-005"
+      },
+      "beklenen_cevap_icermeli": [
+        "Firewall",
+        "CPU",
+        "DDoS",
+        "Kritik"
+      ],
+      "max_tool_cagrisi": 1
+    },
+    {
+      "case_id": "TOOL-003",
+      "kategori": "Tool Çağrı",
+      "zorluk": "Orta",
+      "aciklama": "RCA için önce ticket al, sonra RAG ara - sıralı tool çağrısı",
+      "kullanici_girdisi": "INC-2024-009 için RCA raporu üret.",
+      "beklenen_tool_sirasi": [
+        "get_ticket_by_id",
+        "rag_search"
+      ],
+      "beklenen_rag_query_icermeli": [
+        "MACFLAP",
+        "broadcast storm",
+        "STP",
+        "network loop"
+      ],
+      "beklenen_cevap_icermeli": [
+        "Kök Neden",
+        "BPDU Guard",
+        "önleyici"
+      ],
+      "max_tool_cagrisi": 4
+    },
+    {
+      "case_id": "TOOL-004",
+      "kategori": "Tool Çağrı",
+      "zorluk": "Orta",
+      "aciklama": "Kategori istatistiği - aggregation tool çağrısı",
+      "kullanici_girdisi": "Bu ay kaç tane Firewall kategorisinde ticket açıldı? Durumlarına göre dağılım nedir?",
+      "beklenen_tool_cagrisi": "get_tickets",
+      "beklenen_tool_argumanlari": {
+        "kategori": "Firewall"
+      },
+      "beklenen_cevap_icermeli": [
+        "Firewall",
+        "Açık",
+        "Çözümlendi",
+        "toplam"
+      ],
+      "max_tool_cagrisi": 2
+    },
+    {
+      "case_id": "TOOL-005",
+      "kategori": "Tool Çağrı",
+      "zorluk": "Zor",
+      "aciklama": "Benzer geçmiş olaylar - hem ITSM hem RAG paralel kullanım",
+      "kullanici_girdisi": "BGP ile ilgili geçmişte benzer olaylar yaşandı mı? Varsa nasıl çözüldü?",
+      "beklenen_tool_sirasi": [
+        "get_tickets",
+        "rag_search"
+      ],
+      "beklenen_rag_query_icermeli": [
+        "BGP",
+        "çözüm",
+        "geçmiş"
+      ],
+      "beklenen_cevap_icermeli": [
+        "BGP",
+        "çözüm",
+        "geçmiş",
+        "failover"
+      ],
+      "max_tool_cagrisi": 4
+    },
+    {
+      "case_id": "NEG-001",
+      "kategori": "Negatif Test",
+      "zorluk": "Kolay",
+      "aciklama": "Var olmayan ticket ID",
+      "kullanici_girdisi": "INC-9999 numaralı ticket'ı göster.",
+      "beklenen_davranis": "Ticket bulunamadı mesajı vermeli, uydurmamali",
+      "beklenmemesi_gereken": [
+        "INC-9999 için detaylar şöyle",
+        "ticket şunu içeriyor"
+      ],
+      "beklenen_cevap_icermeli": [
+        "bulunamadı",
+        "mevcut değil",
+        "INC-9999"
+      ]
+    },
+    {
+      "case_id": "NEG-002",
+      "kategori": "Negatif Test",
+      "zorluk": "Kolay",
+      "aciklama": "KB'de olmayan konuda soru - hallucination testi",
+      "kullanici_girdisi": "Kubernetes pod scheduling sorununu nasıl çözerim?",
+      "beklenen_davranis": "KB'de bu konu yok, uydurmamali. Sınırlarını belirtmeli.",
+      "beklenmemesi_gereken": [
+        "pod affinity",
+        "node selector",
+        "taint"
+      ],
+      "beklenen_cevap_icermeli": [
+        "knowledge base",
+        "kapsam dışı",
+        "bu konuda bilgi yok"
+      ]
+    },
+    {
+      "case_id": "NEG-003",
+      "kategori": "Negatif Test",
+      "zorluk": "Orta",
+      "aciklama": "Çok geniş sorgu - agent odaklanmalı, tüm ticketları dökmemeli",
+      "kullanici_girdisi": "Tüm network sorunlarını anlat.",
+      "beklenen_davranis": "Özet vermeli, kategori/öncelik sormali veya filtrelemeli",
+      "max_cevap_kelime: ": 500,
+      "beklenmemesi_gereken_davranis": "250 ticket'ı birebir listele"
+    },
+    {
+      "case_id": "NEG-004",
+      "kategori": "Negatif Test",
+      "zorluk": "Zor",
+      "aciklama": "Çelişkili bilgi - ticket vs KB çelişirse agent ne yapmalı",
+      "kullanici_girdisi": "DHCP sorunu için KB'de ne yazıyor? Ticket'taki bilgiyle fark var mı?",
+      "beklenen_davranis": "Her iki kaynağı karşılaştırmalı, çelişkileri belirtmeli",
+      "beklenen_cevap_icermeli": [
+        "KB",
+        "ticket",
+        "farklılık"
+      ]
+    },
+    {
+      "case_id": "NEG-005",
+      "kategori": "Negatif Test",
+      "zorluk": "Zor",
+      "aciklama": "Eksik log verisiyle RCA - agent belirsizliği kabul etmeli",
+      "kullanici_girdisi": "Sistem yavaşladı, ne yapmalıyım? Başka bilgi yok.",
+      "beklenen_davranis": "Daha fazla bilgi isteymeli: hangi sistem, ne zamandan beri, log var mı?",
+      "beklenmemesi_gereken": [
+        "kök neden şudur",
+        "RCA raporu"
+      ],
+      "beklenen_cevap_icermeli": [
+        "hangi sistem",
+        "daha fazla bilgi",
+        "log"
+      ]
+    }
+  ]
+}
