@@ -94,6 +94,43 @@ def _ensure_collection(
     )
 
 
+def _delete_existing_points_for_sources(
+    *,
+    qdrant: QdrantClient,
+    source_pdf_names: set[str],
+) -> None:
+    """Delete existing points for the given ``source_pdf_name`` values.
+
+    Re-indexing the same PDF after a chunking change produces new content
+    hashes, so old points (with their stale chunks) would otherwise remain.
+    This filtered delete clears only those sources, leaving other PDFs in
+    the collection untouched.
+    """
+    if not source_pdf_names:
+        return
+    if not qdrant.collection_exists(COLLECTION_NAME):
+        return
+    names = sorted(source_pdf_names)
+    logger.info(
+        f"_delete_existing_points_for_sources: clearing prior points for "
+        f"{names} from '{COLLECTION_NAME}'"
+    )
+    qdrant.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=models.FilterSelector(
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source_pdf_name",
+                        match=models.MatchAny(any=names),
+                    )
+                ]
+            )
+        ),
+        wait=True,
+    )
+
+
 def _embed_batch(*, openai: OpenAI, texts: list[str]) -> list[list[float]]:
     """Embed a batch of texts via Fireworks (OpenAI-compatible)."""
     t0 = time.perf_counter()
@@ -119,6 +156,7 @@ def _run_upsert(
     dense_dim: int,
     embed_batch_size: int,
     upsert_batch_size: int,
+    cleanup_existing: bool,
 ) -> dict:
     """Workhorse: ensure collection, embed missing, upsert. Takes pre-built clients."""
     _ensure_collection(qdrant=qdrant, dense_dim=dense_dim)
@@ -139,6 +177,16 @@ def _run_upsert(
         h = content_hash(text=c.page_content)
         pid = point_id(source_pdf_name=source, content_hash=h)
         prepared.append((pid, h, c))
+
+    if cleanup_existing:
+        sources_to_clear = {
+            c.metadata.get("source_pdf_name")
+            for _, _, c in prepared
+            if c.metadata.get("source_pdf_name")
+        }
+        _delete_existing_points_for_sources(
+            qdrant=qdrant, source_pdf_names=sources_to_clear
+        )
 
     logger.info(f"_run_upsert: embedding+upserting {len(prepared)} chunks")
 
@@ -194,8 +242,14 @@ def upsert_chunks(
     dense_dim: int = DENSE_DIM,
     embed_batch_size: int = EMBED_BATCH_SIZE,
     upsert_batch_size: int = UPSERT_BATCH_SIZE,
+    cleanup_existing: bool = True,
 ) -> dict:
     """Upsert a batch of chunks. Builds clients fresh on each call from ``secrets``.
+
+    ``cleanup_existing`` (default ``True``) deletes any existing points whose
+    ``source_pdf_name`` matches a chunk in this batch before re-indexing.
+    Prevents stale chunks from prior runs (e.g. with different chunking logic)
+    from polluting retrieval. Other PDFs in the collection are untouched.
 
     Returns a dict with counters: ``total``, ``upserted``.
     """
@@ -208,6 +262,7 @@ def upsert_chunks(
         dense_dim=dense_dim,
         embed_batch_size=embed_batch_size,
         upsert_batch_size=upsert_batch_size,
+        cleanup_existing=cleanup_existing,
     )
 
 

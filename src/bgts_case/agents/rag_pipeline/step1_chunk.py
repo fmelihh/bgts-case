@@ -54,6 +54,186 @@ _TEXT_SPLITTER = RecursiveCharacterTextSplitter(
 
 _MD_TABLE_RE = re.compile(r"^\|.*\n\|[\s\-:|]+\|\n(?:\|.*\n?)+", flags=re.MULTILINE)
 
+PAGE_SENTINEL_RE = re.compile(r"\[\[PAGE_(\d+)\]\]")
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
+
+# Matches a metadata header line with at least two pipe-separated "key: value" pairs.
+# Generic across languages and field names; optionally wrapped in _..._ or *...* emphasis.
+HEADER_META_LINE_RE = re.compile(
+    r"^[_*]?\s*"
+    r"([^:\n|]+?:\s*[^|\n]+?)"  # first key: value
+    r"(?:\s*\|\s*[^:\n|]+?:\s*[^|\n]+?){1,}"  # at least one more key: value
+    r"\s*[_*]?\s*$",
+    flags=re.MULTILINE,
+)
+
+KV_PAIR_RE = re.compile(r"\s*([^:|]+?)\s*:\s*([^|]+?)\s*(?:\||$)")
+
+MIN_TEXT_CHUNK_CHARS = 150
+
+# A fenced code block: ``` ... ``` (non-greedy, multiline).
+FENCED_CODE_BLOCK_RE = re.compile(r"```[^\n]*\n(.*?)```", flags=re.DOTALL)
+
+# A run of lines that explain the preceding code block — lines starting with --> or #.
+TRAILING_EXPLANATION_RE = re.compile(
+    r"^\s*(?:-->|#)[^\n]*(?:\n\s*(?:-->|#)[^\n]*)*",
+    flags=re.MULTILINE,
+)
+
+# Treat a text doc as "code-listing-dominated" when fenced blocks make up
+# at least this fraction of its characters.
+CODE_LISTING_RATIO_THRESHOLD = 0.4
+
+# Cisco-style syslog entry boundary: ``%FACILITY-SEVERITY-MNEMONIC:`` at line
+# start. Used to sub-split a single fenced log block that contains multiple
+# independent log entries into one fenced chunk per entry.
+LOG_LINE_BOUNDARY_RE = re.compile(r"(?=^%[A-Z_]+-\d+-[A-Z_]+:)", flags=re.MULTILINE)
+
+
+def _extract_page_numbers(text: str) -> list[int]:
+    """Return all 1-based page numbers referenced by [[PAGE_N]] sentinels in text."""
+    return sorted({int(m.group(1)) for m in PAGE_SENTINEL_RE.finditer(text)})
+
+
+def _interleave_page_sentinels(page_text: str, page_number: int) -> str:
+    """Insert ``[[PAGE_N]]`` markers between every paragraph of a page's markdown.
+
+    Plain-text markers survive ``MarkdownHeaderTextSplitter`` and
+    ``UnstructuredMarkdownLoader`` (unlike HTML comments). Inserting between
+    paragraphs — rather than only at page boundaries — guarantees every
+    section body chunk contains at least one marker, so ``page_number`` can
+    be recovered after splitting.
+    """
+    sentinel = f"[[PAGE_{page_number}]]"
+    paragraphs = _PARAGRAPH_SPLIT_RE.split(page_text)
+    parts: list[str] = []
+    for p in paragraphs:
+        stripped = p.strip()
+        if not stripped:
+            continue
+        parts.append(stripped)
+        parts.append(sentinel)
+    return "\n\n".join(parts)
+
+
+def _slugify_key(key: str) -> str:
+    """Normalize a metadata key into snake_case for use as a dict key."""
+    k = key.strip().lower()
+    k = re.sub(r"[^a-z0-9]+", "_", k, flags=re.UNICODE)
+    return k.strip("_") or "field"
+
+
+def _extract_header_meta(combined_md: str) -> dict:
+    """Extract document-level metadata from the first ``k: v | k: v | ...`` line found.
+
+    Returns a dict of slugified keys to string values. Empty if no such line exists.
+    Generic across documents: any pipe-delimited `key: value` line near the top works.
+    """
+    match = HEADER_META_LINE_RE.search(combined_md)
+    if not match:
+        return {}
+    line = match.group(0).strip().strip("_*").strip()
+    pairs = KV_PAIR_RE.findall(line)
+    if not pairs:
+        return {}
+    meta = {_slugify_key(k): v.strip() for k, v in pairs}
+    logger.debug(f"_extract_header_meta: parsed {len(meta)} fields: {meta}")
+    return meta
+
+
+def _is_header_meta_only(text: str) -> bool:
+    """True if the chunk text is essentially just the document header metadata line."""
+    stripped = text.strip().strip("_*").strip()
+    if not stripped:
+        return True
+    if not HEADER_META_LINE_RE.search(stripped):
+        return False
+    leftover = HEADER_META_LINE_RE.sub("", stripped).strip()
+    return len(leftover) < 20
+
+
+def _is_code_listing_section(text: str) -> bool:
+    """True if the section is dominated by fenced code blocks."""
+    if "```" not in text:
+        return False
+    code_chars = sum(len(m.group(0)) for m in FENCED_CODE_BLOCK_RE.finditer(text))
+    return code_chars / max(len(text), 1) >= CODE_LISTING_RATIO_THRESHOLD
+
+
+def _further_split_log_block(block: str) -> list[str]:
+    """If a fenced block holds multiple log entries separated by
+    ``LOG_LINE_BOUNDARY_RE``, return one fenced block per entry.
+
+    Otherwise return ``[block]`` unchanged.
+    """
+    if not LOG_LINE_BOUNDARY_RE.search(block):
+        return [block]
+    inner = re.sub(r"^```[^\n]*\n|\n```\s*$", "", block).strip()
+    parts = LOG_LINE_BOUNDARY_RE.split(inner)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) <= 1:
+        return [block]
+    logger.debug(
+        f"_further_split_log_block: split fenced block into {len(parts)} log entries"
+    )
+    return [f"```\n{p}\n```" for p in parts]
+
+
+def _split_code_listing(text: str) -> list[str]:
+    """Split a code-listing-dominated section into one chunk per fenced block.
+
+    Each chunk includes the fenced block plus any immediately-following
+    explanation lines (``-->`` or ``#`` style). Prose between blocks that
+    isn't an explanation is not pulled in. Each fenced block is then run
+    through :func:`_further_split_log_block` to break up multi-entry logs.
+    """
+    blocks: list[tuple[int, int]] = [
+        (m.start(), m.end()) for m in FENCED_CODE_BLOCK_RE.finditer(text)
+    ]
+    if not blocks:
+        return [text]
+
+    pieces: list[str] = []
+    for i, (start, end) in enumerate(blocks):
+        next_start = blocks[i + 1][0] if i + 1 < len(blocks) else len(text)
+        tail = text[end:next_start]
+
+        # Capture explanation lines (--> or #) that immediately follow the block.
+        explanation_match = TRAILING_EXPLANATION_RE.match(tail.lstrip("\n"))
+        if explanation_match:
+            offset = len(tail) - len(tail.lstrip("\n"))
+            tail_kept = tail[: offset + explanation_match.end()]
+        else:
+            tail_kept = ""
+
+        block_with_tail = (text[start:end] + tail_kept).strip()
+        if not block_with_tail:
+            continue
+
+        for sub in _further_split_log_block(block_with_tail):
+            sub = sub.strip()
+            if sub:
+                pieces.append(sub)
+
+    return pieces or [text]
+
+
+def _find_intro_text_doc(
+    doc_title: str,
+    text_docs: list[Document],
+    max_chars: int = 300,
+) -> Document | None:
+    """Find a short text doc under the same doc_title to use as table intro context."""
+    candidates = [
+        td
+        for td in text_docs
+        if td.metadata.get("doc_title") == doc_title
+        and 0 < len(td.page_content.strip()) <= max_chars
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda d: len(d.page_content.strip()))
+
 
 def pdf_to_page_markdowns(pdf_path: str | Path) -> list[dict]:
     """Render a PDF to per-page markdown dicts using pymupdf4llm.
@@ -213,8 +393,20 @@ def is_simple_table(html_table: str) -> tuple[bool, int]:
     return True, nested_count
 
 
+def _looks_like_generic_header(columns) -> bool:
+    """True if pandas assigned generic 0,1,2,... or '0','1','2',... column names."""
+    for c in columns:
+        if isinstance(c, int):
+            continue
+        if isinstance(c, str) and c.strip().isdigit():
+            continue
+        return False
+    return True
+
+
 def table_to_kv_lines(html_table: str) -> tuple[list[str], list[str]]:
     """Convert a simple 2D table into ``col1: v1, col2: v2, ...`` rows."""
+    html_table = PAGE_SENTINEL_RE.sub("", html_table)
     df = pd.read_html(StringIO(html_table))[0]
 
     if isinstance(df.columns, pd.MultiIndex):
@@ -224,6 +416,18 @@ def table_to_kv_lines(html_table: str) -> tuple[list[str], list[str]]:
         ]
     else:
         df.columns = [str(c) for c in df.columns]
+
+    # If pandas couldn't find <th>, the real headers ended up as row 0.
+    # Promote row 0 to the column header, but only if every promoted value is non-empty.
+    if _looks_like_generic_header(df.columns) and len(df) > 0:
+        new_header = [str(v).strip() for v in df.iloc[0].tolist()]
+        if all(h and h.lower() != "nan" for h in new_header):
+            logger.debug(
+                f"table_to_kv_lines: promoting first row to header. "
+                f"Old: {list(df.columns)} -> New: {new_header}"
+            )
+            df.columns = new_header
+            df = df.iloc[1:].reset_index(drop=True)
 
     df = df.fillna("")
     cols = [str(c) for c in df.columns]
@@ -239,17 +443,19 @@ def split_kv_table(
     cols: list[str],
     doc_title: str,
     extra_meta: dict | None = None,
+    intro: str | None = None,
 ) -> list[Document]:
     """Split KV table rows, prepending header context to every chunk."""
     extra_meta = extra_meta or {}
 
-    header_ctx = f"[Document: {doc_title}]\n[Columns: {', '.join(cols)}]\n"
+    intro_line = f"[Context: {intro.strip()}]\n" if intro else ""
+    header_ctx = f"[Document: {doc_title}]\n{intro_line}[Columns: {', '.join(cols)}]\n"
     body = "\n".join(lines)
     effective_size = max(CHUNK_SIZE - len(header_ctx), MIN_TABLE_CHUNK_SIZE)
     logger.debug(
         f"split_kv_table: doc_title='{doc_title}' rows={len(lines)} "
         f"body_chars={len(body)} header_ctx_chars={len(header_ctx)} "
-        f"effective_chunk_size={effective_size}"
+        f"effective_chunk_size={effective_size} has_intro={intro is not None}"
     )
 
     table_splitter = RecursiveCharacterTextSplitter(
@@ -296,40 +502,14 @@ def chunk_documents(
         f"chunk_documents: chunking {len(text_docs)} text docs, {len(table_docs)} table docs"
     )
     chunks: list[Document] = []
-    text_chunks_added = 0
-    skipped_empty_text = 0
 
-    ## Processing TEXT DOCUMENTS ##
-    for tdoc in text_docs:
-        if not tdoc.page_content.strip():
-            skipped_empty_text += 1
-            continue
-
-        doc_title = tdoc.metadata.get("doc_title", "Unknown Document")
-        pieces = _TEXT_SPLITTER.split_text(tdoc.page_content)
-        logger.debug(
-            f"chunk_documents: text doc_title='{doc_title}' "
-            f"{len(tdoc.page_content)} chars -> {len(pieces)} chunks"
-        )
-        for piece in pieces:
-            chunks.append(
-                Document(
-                    page_content=piece,
-                    metadata={
-                        **tdoc.metadata,
-                        "doc_title": doc_title,
-                        "type": "text_chunk",
-                    },
-                )
-            )
-            text_chunks_added += 1
-
+    ## Processing TABLE DOCUMENTS FIRST so we can mark intro text docs as consumed. ##
+    consumed_text_doc_ids: set[int] = set()
     table_chunks_added = 0
     nested_tables = 0
     simple_tables = 0
     skipped_empty_tables = 0
 
-    ## Processing TABLE DOCUMENTS ##
     for tdoc in table_docs:
         html_table = tdoc.metadata.get("text_as_html") or ""
         doc_title = tdoc.metadata.get("doc_title", "Unknown Document")
@@ -359,10 +539,26 @@ def chunk_documents(
             )
             continue
 
+        intro_doc = _find_intro_text_doc(doc_title, text_docs)
+        intro_text = None
+        if intro_doc is not None:
+            intro_text = intro_doc.page_content.strip()
+            consumed_text_doc_ids.add(id(intro_doc))
+            logger.debug(
+                f"chunk_documents: using intro for table '{doc_title}': "
+                f"{intro_text[:80]}..."
+            )
+
         extra_meta: dict = {"source_category": "Table"}
         if source:
             extra_meta["source"] = source
-        for key in ("page_number", "total_pages", "source_pdf", "source_pdf_name"):
+        for key in (
+            "page_number",
+            "total_pages",
+            "source_pdf",
+            "source_pdf_name",
+            "header_meta",
+        ):
             val = tdoc.metadata.get(key)
             if val is not None:
                 extra_meta[key] = val
@@ -372,9 +568,75 @@ def chunk_documents(
             cols=cols,
             doc_title=doc_title,
             extra_meta=extra_meta,
+            intro=intro_text,
         )
         chunks.extend(new_chunks)
         table_chunks_added += len(new_chunks)
+
+    ## Processing TEXT DOCUMENTS, skipping the ones already used as intros. ##
+    text_chunks_added = 0
+    skipped_empty_text = 0
+    skipped_short_text = 0
+    skipped_header_meta_text = 0
+    skipped_consumed_text = 0
+
+    for tdoc in text_docs:
+        if id(tdoc) in consumed_text_doc_ids:
+            skipped_consumed_text += 1
+            continue
+
+        body = tdoc.page_content.strip()
+        if not body:
+            skipped_empty_text += 1
+            continue
+        if _is_header_meta_only(body):
+            skipped_header_meta_text += 1
+            logger.debug("chunk_documents: dropping header-meta-only chunk")
+            continue
+
+        doc_title = tdoc.metadata.get("doc_title", "Unknown Document")
+
+        is_code_listing = _is_code_listing_section(tdoc.page_content)
+        if is_code_listing:
+            pieces = _split_code_listing(tdoc.page_content)
+            logger.debug(
+                f"chunk_documents: code-listing section '{doc_title}' "
+                f"-> {len(pieces)} fenced-block chunks"
+            )
+        else:
+            pieces = _TEXT_SPLITTER.split_text(tdoc.page_content)
+            logger.debug(
+                f"chunk_documents: text doc_title='{doc_title}' "
+                f"{len(tdoc.page_content)} chars -> {len(pieces)} chunks"
+            )
+
+        for piece in pieces:
+            piece_stripped = piece.strip()
+            if not piece_stripped:
+                continue
+            if not is_code_listing and len(piece_stripped) < MIN_TEXT_CHUNK_CHARS:
+                skipped_short_text += 1
+                logger.debug(
+                    f"chunk_documents: dropping short text chunk "
+                    f"({len(piece_stripped)} chars) under doc_title='{doc_title}'"
+                )
+                continue
+            page_content = (
+                f"[Document: {doc_title}]\n{piece_stripped}"
+                if is_code_listing
+                else piece
+            )
+            chunks.append(
+                Document(
+                    page_content=page_content,
+                    metadata={
+                        **tdoc.metadata,
+                        "doc_title": doc_title,
+                        "type": "text_chunk",
+                    },
+                )
+            )
+            text_chunks_added += 1
 
     total_chars = sum(len(c.page_content) for c in chunks)
     avg_chars = (total_chars // len(chunks)) if chunks else 0
@@ -382,7 +644,9 @@ def chunk_documents(
         f"chunk_documents: produced {len(chunks)} chunks "
         f"(text={text_chunks_added} from {len(text_docs)} docs, "
         f"table={table_chunks_added} from {simple_tables} simple+{nested_tables} nested, "
-        f"skipped {skipped_empty_text} empty text, {skipped_empty_tables} empty tables) "
+        f"skipped {skipped_empty_text} empty + {skipped_short_text} short + "
+        f"{skipped_header_meta_text} header-meta + {skipped_consumed_text} intro-consumed text, "
+        f"{skipped_empty_tables} empty tables) "
         f"| total_chars={total_chars} avg={avg_chars}"
     )
     return chunks
@@ -395,14 +659,10 @@ def process_pdf(
 ) -> list[Document]:
     """Full pipeline for a single PDF: PDF -> per-page markdown -> chunks.
 
-    Pages are processed one at a time so every emitted Document carries
-    ``page_number`` (1-based) and ``total_pages`` in its metadata. The running
-    section title from :func:`load_split_documents` is threaded across page
-    boundaries via ``initial_doc_title`` so content on a page that opens
-    without its own heading inherits the heading from the previous page.
-
-    Each page's markdown is written into a shared ``TemporaryDirectory`` so
-    everything is removed when the ``with`` block exits — no manual unlink.
+    All pages are merged into a single markdown document before splitting, so
+    sections that span page boundaries are kept together. ``<!-- page: N -->``
+    sentinels mark page boundaries; after splitting they are used to recover
+    the ``page_number`` metadata and then stripped from the chunk content.
 
     ``alert`` is forwarded to :func:`chunk_documents` and fires for nested
     tables. Default is :func:`mock_slack_alert`.
@@ -414,33 +674,58 @@ def process_pdf(
     pages = pdf_to_page_markdowns(pdf_path)
     total_pages = len(pages)
 
-    table_docs: list[Document] = []
-    text_docs: list[Document] = []
+    # Merge all pages into a single markdown document with [[PAGE_N]] sentinels
+    # interleaved between every paragraph (not just at page boundaries) so that
+    # every chunk recovers a page_number after splitting.
+    parts = []
+    for idx, page in enumerate(pages):
+        page_number = idx + 1
+        parts.append(_interleave_page_sentinels(page.get("text", ""), page_number))
+    combined_md = "\n\n".join(parts)
+
+    sentinel_count = len(PAGE_SENTINEL_RE.findall(combined_md))
+    logger.debug(
+        f"process_pdf: combined_md {len(combined_md)} chars, "
+        f"{sentinel_count} page sentinels"
+    )
+
+    header_meta = _extract_header_meta(combined_md)
+
     running_title = "Unknown Document"
-
     with tempfile.TemporaryDirectory(prefix="bgts_rag_") as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        for idx, page in enumerate(pages):
-            page_number = idx + 1
-            page_md = page.get("text", "")
-            tmp_path = tmpdir_path / f"{pdf_path.stem}_p{page_number}.md"
-            tmp_path.write_text(page_md, encoding="utf-8")
-            logger.debug(
-                f"process_pdf: wrote page {page_number}/{total_pages} markdown "
-                f"to {tmp_path} ({len(page_md)} chars)"
-            )
+        tmp_path = Path(tmpdir) / f"{pdf_path.stem}_combined.md"
+        tmp_path.write_text(combined_md, encoding="utf-8")
+        logger.debug(
+            f"process_pdf: wrote combined markdown for {total_pages} pages "
+            f"to {tmp_path} ({len(combined_md)} chars)"
+        )
 
-            page_table_docs, page_text_docs, running_title = load_split_documents(
-                tmp_path, initial_doc_title=running_title
-            )
-            for doc in page_table_docs + page_text_docs:
-                doc.metadata["page_number"] = page_number
-                doc.metadata["total_pages"] = total_pages
-                doc.metadata["source_pdf"] = str(pdf_path)
-                doc.metadata["source_pdf_name"] = pdf_path.name
+        table_docs, text_docs, running_title = load_split_documents(
+            tmp_path, initial_doc_title=running_title
+        )
+        logger.debug(f"process_pdf: final running section title = '{running_title}'")
 
-            table_docs.extend(page_table_docs)
-            text_docs.extend(page_text_docs)
+    pre_chunk_docs = table_docs + text_docs
+    with_sentinel = sum(
+        1 for d in pre_chunk_docs if PAGE_SENTINEL_RE.search(d.page_content)
+    )
+    logger.debug(
+        f"process_pdf: {with_sentinel}/{len(pre_chunk_docs)} pre-chunk docs "
+        f"contain at least one page sentinel"
+    )
+
+    # Recover page_number(s) per chunk, then strip sentinels from page_content.
+    for doc in pre_chunk_docs:
+        page_nums = _extract_page_numbers(doc.page_content)
+        doc.page_content = PAGE_SENTINEL_RE.sub("", doc.page_content).strip()
+        # Collapse blank lines left behind by sentinel removal.
+        doc.page_content = re.sub(r"\n{3,}", "\n\n", doc.page_content).strip()
+        doc.metadata["page_number"] = page_nums[0] if page_nums else None
+        doc.metadata["total_pages"] = total_pages
+        doc.metadata["source_pdf"] = str(pdf_path)
+        doc.metadata["source_pdf_name"] = pdf_path.name
+        if header_meta:
+            doc.metadata["header_meta"] = header_meta
 
     chunks = chunk_documents(
         table_docs=table_docs, text_docs=text_docs, alert_fn=alert_fn
