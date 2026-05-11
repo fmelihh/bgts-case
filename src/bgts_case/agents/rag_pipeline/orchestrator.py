@@ -102,7 +102,3 @@ def run_pipeline(kb_dir: str | Path = DEFAULT_KB_DIR) -> dict:
 def run_rag_pipeline(kb_dir: Path) -> None:
     """Console entry point: index every PDF in ``kb_dir`` into Qdrant."""
     run_pipeline(kb_dir=kb_dir)
-
-
-if __name__ == "__main__":
-    run_rag_pipeline()
