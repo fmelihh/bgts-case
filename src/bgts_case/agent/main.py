@@ -68,7 +68,7 @@ Sonuç boş veya alakasız döndüyse Belirsizlikler'de açıkça belirt; ezberd
 </tipik_tuzaklar>
 
 <çıktı_formatı>
-Türkçe sun; teknik terimleri (BGP, MTU, BFD) orijinal bırak; komutları code block içinde ver. Bölümler kısa ve doğrudan olsun; gereksiz tekrar yapma.
+Dil Türkçe olacak, teknik terimler orijinal. Bölümler açıkça ayrılmış, kısa ve doğrudan. Gereksiz tekrar yok.
 
 ## Zaman Çizelgesi ve Kök Neden Akışı
 Olayların kronolojik sırasını ver ve aynı akış içinde kök nedene doğru ilerle. 2-5 seviyeli N-Why; her seviyede kaynak etiketi (KB / ticket / hipotez). Birden fazla aday neden varsa dallandır. İlişkili geçmiş ticket olayları da kronolojiye dahil.

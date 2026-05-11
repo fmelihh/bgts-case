@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from datetime import datetime, timedelta
 
 from sqlalchemy import Text, case, cast, func
@@ -214,7 +215,7 @@ def aggregate_tickets(
     def _stringify(v: object) -> str:
         if v is None:
             return "(none)"
-        if hasattr(v, "value"):
+        if isinstance(v, enum.Enum):
             return str(v.value)
         return str(v)
 
