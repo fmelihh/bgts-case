@@ -15,7 +15,8 @@ from qdrant_client import QdrantClient
 from bgts_case.secret import secrets
 
 FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
-DEFAULT_CHAT_MODEL = "accounts/fireworks/models/qwen3-vl-30b-a3b-instruct"
+DEFAULT_CHAT_MODEL = "accounts/fireworks/models/qwen3-vl-30b-a3b-thinking"
+FALLBACK_CHAT_MODEL = "accounts/fireworks/models/qwen3-vl-30b-a3b-instruct"
 
 
 def make_qdrant_client() -> QdrantClient:
