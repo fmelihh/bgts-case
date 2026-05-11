@@ -14,9 +14,10 @@ from qdrant_client import QdrantClient
 
 from bgts_case.secret import secrets
 
-FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
+MODEL_PROVIDER_BASE_URL = "https://api.fireworks.ai/inference/v1"
 DEFAULT_CHAT_MODEL = "accounts/fireworks/models/deepseek-v4-pro"
 FALLBACK_CHAT_MODEL = "accounts/fireworks/models/qwen3-vl-30b-a3b-instruct"
+EVAL_MODEL = "accounts/fireworks/models/qwen3-8b"
 
 
 def make_qdrant_client() -> QdrantClient:
@@ -32,7 +33,7 @@ def make_qdrant_client() -> QdrantClient:
 
 def make_openai_client() -> OpenAI:
     return OpenAI(
-        base_url=FIREWORKS_BASE_URL,
+        base_url=MODEL_PROVIDER_BASE_URL,
         api_key=secrets.fireworks_api_key.get_secret_value(),
     )
 
@@ -44,7 +45,7 @@ def make_chat_model(
 ) -> ChatOpenAI:
     return ChatOpenAI(
         model=model,
-        base_url=FIREWORKS_BASE_URL,
+        base_url=MODEL_PROVIDER_BASE_URL,
         api_key=secrets.fireworks_api_key,
         temperature=temperature,
     )
