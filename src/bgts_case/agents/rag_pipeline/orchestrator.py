@@ -15,7 +15,7 @@ from bgts_case.agents.rag_pipeline import step1_chunk, step2_qdrant_index
 
 
 def run_pipeline():
-    pdf_path = "/Users/furkanmelih/personal_projects/bgts-case/static/knowledge_base/KB-01_BGP_Troubleshooting.pdf"
+    pdf_path = "/Users/furkanmelih/personal_projects/bgts-case/static/knowledge_base/KB-04_DNS_DHCP_Yonetim.pdf"
     try:
         chunks = step1_chunk.process_pdf(pdf_path=pdf_path, alert_fn=mock_slack_alert)
         logger.info(f"Pipeline produced {len(chunks)} chunks from {pdf_path}")

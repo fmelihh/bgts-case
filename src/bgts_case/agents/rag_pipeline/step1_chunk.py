@@ -33,11 +33,28 @@ from langchain_text_splitters import (
 from loguru import logger
 
 from bgts_case.agents.alerts import AlertFn, mock_slack_alert
+from bgts_case.agents.rag_pipeline.patterns import (
+    BLANK_LINE_RUN_RE,
+    FENCED_CODE_BLOCK_RE,
+    HEADER_META_LINE_RE,
+    KV_PAIR_RE,
+    LOG_LINE_BOUNDARY_RE,
+    MD_TABLE_RE,
+    NUMBERED_LIST_PREFIX_RE,
+    PAGE_SENTINEL_RE,
+    PARAGRAPH_SPLIT_RE,
+    TRAILING_EXPLANATION_RE,
+)
 
 CHUNK_SIZE = 1024
 TEXT_CHUNK_OVERLAP = 100
 TABLE_CHUNK_OVERLAP = 0
 MIN_TABLE_CHUNK_SIZE = 256
+MIN_TEXT_CHUNK_CHARS = 150
+
+# Treat a text doc as "code-listing-dominated" when fenced blocks make up
+# at least this fraction of its characters.
+CODE_LISTING_RATIO_THRESHOLD = 0.4
 
 
 _HEADER_SPLITTER = MarkdownHeaderTextSplitter(
@@ -52,42 +69,30 @@ _TEXT_SPLITTER = RecursiveCharacterTextSplitter(
     length_function=len,
 )
 
-_MD_TABLE_RE = re.compile(r"^\|.*\n\|[\s\-:|]+\|\n(?:\|.*\n?)+", flags=re.MULTILINE)
 
-PAGE_SENTINEL_RE = re.compile(r"\[\[PAGE_(\d+)\]\]")
-_PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
+def remove_noise(
+    text: str,
+    *,
+    numbered_list_markers: bool = True,
+    md_tables: bool = False,
+    page_sentinels: bool = False,
+    collapse_blank_lines: bool = True,
+) -> str:
+    """Strip markdown noise from ``text``.
 
-# Matches a metadata header line with at least two pipe-separated "key: value" pairs.
-# Generic across languages and field names; optionally wrapped in _..._ or *...* emphasis.
-HEADER_META_LINE_RE = re.compile(
-    r"^[_*]?\s*"
-    r"([^:\n|]+?:\s*[^|\n]+?)"  # first key: value
-    r"(?:\s*\|\s*[^:\n|]+?:\s*[^|\n]+?){1,}"  # at least one more key: value
-    r"\s*[_*]?\s*$",
-    flags=re.MULTILINE,
-)
-
-KV_PAIR_RE = re.compile(r"\s*([^:|]+?)\s*:\s*([^|]+?)\s*(?:\||$)")
-
-MIN_TEXT_CHUNK_CHARS = 150
-
-# A fenced code block: ``` ... ``` (non-greedy, multiline).
-FENCED_CODE_BLOCK_RE = re.compile(r"```[^\n]*\n(.*?)```", flags=re.DOTALL)
-
-# A run of lines that explain the preceding code block — lines starting with --> or #.
-TRAILING_EXPLANATION_RE = re.compile(
-    r"^\s*(?:-->|#)[^\n]*(?:\n\s*(?:-->|#)[^\n]*)*",
-    flags=re.MULTILINE,
-)
-
-# Treat a text doc as "code-listing-dominated" when fenced blocks make up
-# at least this fraction of its characters.
-CODE_LISTING_RATIO_THRESHOLD = 0.4
-
-# Cisco-style syslog entry boundary: ``%FACILITY-SEVERITY-MNEMONIC:`` at line
-# start. Used to sub-split a single fenced log block that contains multiple
-# independent log entries into one fenced chunk per entry.
-LOG_LINE_BOUNDARY_RE = re.compile(r"(?=^%[A-Z_]+-\d+-[A-Z_]+:)", flags=re.MULTILINE)
+    All removing operations in the chunking pipeline funnel through here so
+    call sites can mix and match what to strip without duplicating regexes.
+    Pattern definitions live in ``patterns.py``.
+    """
+    if numbered_list_markers:
+        text = NUMBERED_LIST_PREFIX_RE.sub("", text)
+    if md_tables:
+        text = MD_TABLE_RE.sub("\n", text)
+    if page_sentinels:
+        text = PAGE_SENTINEL_RE.sub("", text)
+    if collapse_blank_lines:
+        text = BLANK_LINE_RUN_RE.sub("\n\n", text)
+    return text.strip()
 
 
 def _extract_page_numbers(text: str) -> list[int]:
@@ -105,7 +110,7 @@ def _interleave_page_sentinels(page_text: str, page_number: int) -> str:
     be recovered after splitting.
     """
     sentinel = f"[[PAGE_{page_number}]]"
-    paragraphs = _PARAGRAPH_SPLIT_RE.split(page_text)
+    paragraphs = PARAGRAPH_SPLIT_RE.split(page_text)
     parts: list[str] = []
     for p in paragraphs:
         stripped = p.strip()
@@ -345,8 +350,7 @@ def load_split_documents(
             skipped_empty += 1
             continue
 
-        body = _MD_TABLE_RE.sub("\n", body)
-        body = re.sub(r"\n{3,}", "\n\n", body).strip()
+        body = remove_noise(body, md_tables=True)
         if not body:
             skipped_empty += 1
             continue
@@ -406,7 +410,12 @@ def _looks_like_generic_header(columns) -> bool:
 
 def table_to_kv_lines(html_table: str) -> tuple[list[str], list[str]]:
     """Convert a simple 2D table into ``col1: v1, col2: v2, ...`` rows."""
-    html_table = PAGE_SENTINEL_RE.sub("", html_table)
+    html_table = remove_noise(
+        html_table,
+        page_sentinels=True,
+        numbered_list_markers=False,
+        collapse_blank_lines=False,
+    )
     df = pd.read_html(StringIO(html_table))[0]
 
     if isinstance(df.columns, pd.MultiIndex):
@@ -680,7 +689,8 @@ def process_pdf(
     parts = []
     for idx, page in enumerate(pages):
         page_number = idx + 1
-        parts.append(_interleave_page_sentinels(page.get("text", ""), page_number))
+        page_text = remove_noise(page.get("text", ""))
+        parts.append(_interleave_page_sentinels(page_text, page_number))
     combined_md = "\n\n".join(parts)
 
     sentinel_count = len(PAGE_SENTINEL_RE.findall(combined_md))
@@ -717,9 +727,9 @@ def process_pdf(
     # Recover page_number(s) per chunk, then strip sentinels from page_content.
     for doc in pre_chunk_docs:
         page_nums = _extract_page_numbers(doc.page_content)
-        doc.page_content = PAGE_SENTINEL_RE.sub("", doc.page_content).strip()
-        # Collapse blank lines left behind by sentinel removal.
-        doc.page_content = re.sub(r"\n{3,}", "\n\n", doc.page_content).strip()
+        doc.page_content = remove_noise(
+            doc.page_content, page_sentinels=True, numbered_list_markers=False
+        )
         doc.metadata["page_number"] = page_nums[0] if page_nums else None
         doc.metadata["total_pages"] = total_pages
         doc.metadata["source_pdf"] = str(pdf_path)
