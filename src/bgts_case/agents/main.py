@@ -4,6 +4,7 @@ from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 
+from bgts_case.agents.tools import retrieve_knowledge_base
 from bgts_case.secret import secrets
 
 MODEL = "accounts/fireworks/models/qwen3-vl-30b-a3b-instruct"
@@ -27,7 +28,8 @@ mcp_client = MultiServerMCPClient(
 
 
 async def _build_graph():
-    tools = await mcp_client.get_tools()
+    mcp_tools = await mcp_client.get_tools()
+    tools = [*mcp_tools, retrieve_knowledge_base]
     return create_agent(
         model=model,
         tools=tools,

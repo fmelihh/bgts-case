@@ -1,4 +1,4 @@
-.PHONY: help install dev up down logs migrate seed mcp-server
+.PHONY: help install dev up down logs migrate seed mcp-server rag-pipeline
 
 help:
 	@echo "Available targets:"
@@ -10,6 +10,7 @@ help:
 	@echo "  migrate        Apply pending alembic migrations (upgrade head)"
 	@echo "  seed           Seed itsm tickets into Postgres"
 	@echo "  mcp-server     Run the ITSM ticket MCP server (HTTP)"
+	@echo "  rag-pipeline   Index every PDF under static/knowledge_base into Qdrant"
 
 install:
 	uv sync
@@ -34,3 +35,6 @@ seed:
 
 mcp-server:
 	uv run run-ticket-mcp-server
+
+rag-pipeline:
+	uv run run-rag-pipeline

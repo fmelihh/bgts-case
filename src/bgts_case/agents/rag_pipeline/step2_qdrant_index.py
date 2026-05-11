@@ -22,10 +22,9 @@ from loguru import logger
 from openai import OpenAI
 from qdrant_client import QdrantClient, models
 
+from bgts_case.agents.interfaces import make_openai_client, make_qdrant_client
 from bgts_case.agents.utils import batched, content_hash, point_id
-from bgts_case.secret import secrets
 
-FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
 DENSE_MODEL = "accounts/fireworks/models/qwen3-embedding-8b"
 DENSE_DIM = 1024
 
@@ -40,24 +39,6 @@ EMBED_BATCH_SIZE = 32
 
 # Qdrant upsert batch size.
 UPSERT_BATCH_SIZE = 64
-
-
-def _make_qdrant_client() -> QdrantClient:
-    return QdrantClient(
-        url=secrets.qdrant_url,
-        api_key=(
-            secrets.qdrant_api_key.get_secret_value()
-            if secrets.qdrant_api_key
-            else None
-        ),
-    )
-
-
-def _make_openai_client() -> OpenAI:
-    return OpenAI(
-        base_url=FIREWORKS_BASE_URL,
-        api_key=secrets.fireworks_api_key.get_secret_value(),
-    )
 
 
 def _ensure_collection(
@@ -242,19 +223,19 @@ def upsert_chunks(
     dense_dim: int = DENSE_DIM,
     embed_batch_size: int = EMBED_BATCH_SIZE,
     upsert_batch_size: int = UPSERT_BATCH_SIZE,
-    cleanup_existing: bool = True,
+    cleanup_existing: bool = False,
 ) -> dict:
     """Upsert a batch of chunks. Builds clients fresh on each call from ``secrets``.
 
-    ``cleanup_existing`` (default ``True``) deletes any existing points whose
+    ``cleanup_existing`` (default ``False``) deletes any existing points whose
     ``source_pdf_name`` matches a chunk in this batch before re-indexing.
     Prevents stale chunks from prior runs (e.g. with different chunking logic)
     from polluting retrieval. Other PDFs in the collection are untouched.
 
     Returns a dict with counters: ``total``, ``upserted``.
     """
-    qdrant = _make_qdrant_client()
-    openai = _make_openai_client()
+    qdrant = make_qdrant_client()
+    openai = make_openai_client()
     return _run_upsert(
         qdrant=qdrant,
         openai=openai,
