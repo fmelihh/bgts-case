@@ -14,54 +14,27 @@ from bgts_case.mcp_server.session import get_session
 
 JSON_PATH = Path(__file__).resolve().parents[3] / "static" / "itsm_tickets.json"
 
-_STATUS_MAP = {
-    "Açık": TicketStatus.OPEN,
-    "İnceleniyor": TicketStatus.INVESTIGATING,
-    "Çözümlendi": TicketStatus.RESOLVED,
-    "Kapatıldı": TicketStatus.CLOSED,
-}
-
-_PRIORITY_MAP = {
-    "Düşük": TicketPriority.LOW,
-    "Orta": TicketPriority.MEDIUM,
-    "Yüksek": TicketPriority.HIGH,
-    "Kritik": TicketPriority.CRITICAL,
-}
-
-_CATEGORY_MAP = {
-    "Network/WAN": TicketCategory.NETWORK_WAN,
-    "Firewall": TicketCategory.FIREWALL,
-    "VPN": TicketCategory.VPN,
-    "Switch": TicketCategory.SWITCH,
-    "DNS": TicketCategory.DNS,
-    "SD-WAN": TicketCategory.SD_WAN,
-    "Wireless": TicketCategory.WIRELESS,
-    "Sunucu": TicketCategory.SERVER,
-    "Güvenlik": TicketCategory.SECURITY,
-    "Email": TicketCategory.EMAIL,
-}
-
 
 def _to_ticket(raw: dict) -> Ticket:
     return Ticket(
-        ticket_id=raw["id"],
-        title=raw["baslik"],
-        category=_CATEGORY_MAP[raw["kategori"]],
-        sub_category=raw.get("alt_kategori"),
-        priority=_PRIORITY_MAP[raw["oncelik"]],
-        status=_STATUS_MAP[raw["durum"]],
-        opened_at=datetime.fromisoformat(raw["acilis_tarihi"]),
-        last_updated_at=datetime.fromisoformat(raw["son_guncelleme"]),
-        reporter=raw["bildiren"],
-        assigned_team=raw.get("atanan_ekip"),
-        affected_user_count=raw.get("etkilenen_kullanici_sayisi"),
-        affected_system=raw.get("etkilenen_sistem"),
-        description=raw.get("aciklama"),
-        error_messages=raw.get("hata_mesajlari", []),
-        affected_services=raw.get("etkilenen_servisler", []),
-        past_similar_incidents=raw.get("gecmis_benzer_olaylar", []),
-        resolution_time_hours=raw.get("cozum_suresi_saat"),
-        resolution_summary=raw.get("cozum_ozeti"),
+        ticket_id=raw["ticket_id"],
+        title=raw["title"],
+        category=TicketCategory[raw["category"]],
+        sub_category=raw.get("sub_category"),
+        priority=TicketPriority[raw["priority"]],
+        status=TicketStatus[raw["status"]],
+        opened_at=datetime.fromisoformat(raw["opened_at"]),
+        last_updated_at=datetime.fromisoformat(raw["last_updated_at"]),
+        reporter=raw["reporter"],
+        assigned_team=raw.get("assigned_team"),
+        affected_user_count=raw.get("affected_user_count"),
+        affected_system=raw.get("affected_system"),
+        description=raw.get("description"),
+        error_messages=raw.get("error_messages", []),
+        affected_services=raw.get("affected_services", []),
+        past_similar_incidents=raw.get("past_similar_incidents", []),
+        resolution_time_hours=raw.get("resolution_time_hours"),
+        resolution_summary=raw.get("resolution_summary"),
     )
 
 
@@ -70,8 +43,7 @@ def seed_tickets() -> None:
 
     Idempotent — if the table already has rows, the seed is skipped.
     """
-    payload = json.loads(JSON_PATH.read_text(encoding="utf-8"))
-    raw_tickets: list[dict] = payload["tickets"]
+    raw_tickets: list[dict] = json.loads(JSON_PATH.read_text(encoding="utf-8"))
 
     with get_session() as session:
         if session.query(Ticket).first() is not None:
