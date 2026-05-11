@@ -22,11 +22,17 @@ from loguru import logger
 from openai import OpenAI
 from qdrant_client import QdrantClient, models
 
-from bgts_case.agent.interfaces import make_openai_client, make_qdrant_client
+from bgts_case.agent.interfaces import (
+    EVAL_EMBEDDING_DIM as DENSE_DIM,
+)
+from bgts_case.agent.interfaces import (
+    EVAL_EMBEDDING_MODEL as DENSE_MODEL,
+)
+from bgts_case.agent.interfaces import (
+    make_openai_client,
+    make_qdrant_client,
+)
 from bgts_case.agent.utils import batched, content_hash, point_id
-
-DENSE_MODEL = "accounts/fireworks/models/qwen3-embedding-8b"
-DENSE_DIM = 1024
 
 DENSE_VECTOR_NAME = "dense"
 SPARSE_VECTOR_NAME = "bm25"

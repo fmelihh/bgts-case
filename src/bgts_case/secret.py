@@ -14,6 +14,7 @@ class Secrets(BaseSettings):
     qdrant_api_key: SecretStr | None = None
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     mcp_server_url: str = "http://localhost:8765/mcp/"
+    mlflow_tracking_uri: str = "http://localhost:5000"
 
 
 secrets = Secrets()  # type: ignore[call-arg]

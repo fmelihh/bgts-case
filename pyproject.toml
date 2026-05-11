@@ -17,12 +17,14 @@ dependencies = [
     "langgraph-cli[inmem]>=0.4.25",
     "loguru>=0.7.3",
     "markdown>=3.10.2",
-    "pandas>=3.0.2",
+    "mlflow>=3.12.0",
+    "pandas>=2.2.0",
     "pdfplumber>=0.11.9",
     "psycopg[binary]>=3.2.0",
     "pydantic-settings>=2.6.1",
     "pymupdf4llm>=1.27.2.3",
     "qdrant-client>=1.17.1",
+    "ragas>=0.2.0",
     "sqlalchemy>=2.0.36",
     "unstructured>=0.22.27",
 ]
@@ -31,6 +33,7 @@ dependencies = [
 seed-tickets = "bgts_case.mcp_server.seed:seed_tickets"
 run-ticket-mcp-server = "bgts_case.mcp_server.server:run_ticket_mcp_server"
 run-rag-pipeline = "bgts_case.agent.rag_pipeline.orchestrator:run_rag_pipeline"
+run-eval = "bgts_case.eval:run"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
