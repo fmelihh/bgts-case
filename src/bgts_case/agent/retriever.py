@@ -14,8 +14,8 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict
 from qdrant_client import models
 
-from bgts_case.agents.interfaces import make_openai_client, make_qdrant_client
-from bgts_case.agents.rag_pipeline.step2_qdrant_index import (
+from bgts_case.agent.interfaces import make_openai_client, make_qdrant_client
+from bgts_case.agent.rag_pipeline.step2_qdrant_index import (
     COLLECTION_NAME,
     DENSE_DIM,
     DENSE_MODEL,

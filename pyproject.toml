@@ -30,7 +30,7 @@ dependencies = [
 [project.scripts]
 seed-tickets = "bgts_case.mcp_server.seed:seed_tickets"
 run-ticket-mcp-server = "bgts_case.mcp_server.server:run_ticket_mcp_server"
-run-rag-pipeline = "bgts_case.agents.rag_pipeline.orchestrator:run_rag_pipeline"
+run-rag-pipeline = "bgts_case.agent.rag_pipeline.orchestrator:run_rag_pipeline"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

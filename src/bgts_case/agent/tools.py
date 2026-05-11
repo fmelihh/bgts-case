@@ -9,8 +9,8 @@ from __future__ import annotations
 from langchain_core.tools import tool
 from loguru import logger
 
-from bgts_case.agents.alerts import mock_slack_alert
-from bgts_case.agents.retriever import (
+from bgts_case.agent.alerts import mock_slack_alert
+from bgts_case.agent.retriever import (
     ALLOWED_CHUNK_TYPES,
     DEFAULT_LIMIT,
     RetrievedChunk,
@@ -44,51 +44,20 @@ def retrieve_knowledge_base(
     page_number: int | None = None,
     doc_title: str | None = None,
 ) -> str:
-    """Search the internal knowledge base (Qdrant hybrid index) for passages
-    relevant to ``query`` and return them as a numbered, citation-ready list.
+    """Search the Turkish-language knowledge base and return relevant passages.
 
-    The index combines dense embeddings (Fireworks qwen3-embedding-8b) with
-    BM25 sparse vectors and fuses results with RRF. Use this whenever the
-    user's question should be answered from indexed KB documents (runbooks,
-    architecture notes, vendor PDFs).
-
-    Each returned hit has a header line of the form
-    ``[N] doc=<title> | source=<pdf> | page=<n> | type=<text|table> | score=<f>``
-    followed by the passage text. Cite results by source + page in your
-    final answer.
-
-    Strategy tips:
-    - Start with no filters and a short focused query; only add filters if
-      the first pass returns irrelevant or too-broad results.
-    - Filters are ANDed. Combining too many filters can return zero hits —
-      drop the narrowest filter first when that happens.
-    - For tabular/spec questions ("what's the power rating", "list ports"),
-      pass ``chunk_type="table_chunk"``.
-    - For prose explanations or procedures, pass ``chunk_type="text_chunk"``
-      or leave it unset.
+    Queries must be in Turkish (the corpus is Turkish). Translate the user's
+    information need into Turkish before calling; keep acronyms like BGP,
+    VPN, DNS, STP as-is. Start with no filters, then narrow only if needed.
+    Each hit is prefixed with source PDF and page so you can cite it.
 
     Args:
-        query: Natural-language search query. A focused phrase or single
-            sentence works best (the index uses both dense and BM25, so
-            keywords still help). Do not pass the user's entire turn —
-            extract the actual information need.
-        limit: Maximum number of passages to return. Defaults to 5 and is
-            capped at 10. Use 3-5 for focused questions and 8-10 for broad
-            overviews.
-        source_pdf_name: Restrict results to one PDF by exact filename, for
-            example ``"KB-10_Wireless_Altyapi.pdf"``. Use only when you
-            already know which document the answer lives in; otherwise leave
-            unset so all documents are searched.
-        chunk_type: Restrict results to a chunk category. Must be either
-            ``"text_chunk"`` (narrative/markdown sections) or
-            ``"table_chunk"`` (rows extracted from PDF tables, rendered as
-            comma-separated column-value pairs per row). Unset means both.
-        page_number: Restrict results to a single 1-based page in the source
-            PDF. Useful when the user references a specific page; otherwise
-            leave unset.
-        doc_title: Restrict results to chunks whose nearest heading equals
-            this string exactly. Case- and whitespace-sensitive — use
-            sparingly, since slight title variations will return no hits.
+        query: Short focused Turkish query (a phrase or one sentence).
+        limit: Max passages to return (1-10, default 5).
+        source_pdf_name: Restrict to one PDF by exact filename.
+        chunk_type: Either "text_chunk" (prose) or "table_chunk" (table rows).
+        page_number: Restrict to a single 1-based page.
+        doc_title: Restrict to chunks under this exact heading.
     """
     limit = max(1, min(limit, MAX_LIMIT))
     if chunk_type is not None and chunk_type not in ALLOWED_CHUNK_TYPES:

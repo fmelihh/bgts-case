@@ -29,8 +29,8 @@ from langchain_text_splitters import (
 )
 from loguru import logger
 
-from bgts_case.agents.alerts import AlertFn, mock_slack_alert
-from bgts_case.agents.rag_pipeline.patterns import (
+from bgts_case.agent.alerts import AlertFn, mock_slack_alert
+from bgts_case.agent.rag_pipeline.patterns import (
     FENCED_CODE_BLOCK_RE,
     HEADER_META_LINE_RE,
     HEADING_LINE_RE,

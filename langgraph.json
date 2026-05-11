@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": "./src/bgts_case/agents/main.py:graph"
+    "agent": "./src/bgts_case/agent/main.py:graph"
   },
   "env": ".env"
 }

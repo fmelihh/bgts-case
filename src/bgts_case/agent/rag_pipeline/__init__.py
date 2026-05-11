@@ -6,7 +6,7 @@ Public entry points:
 - :func:`process_pdf` — step 1 (chunking) only; exported for tests/notebooks.
 """
 
-from bgts_case.agents.rag_pipeline.orchestrator import run_pipeline
-from bgts_case.agents.rag_pipeline.step1_chunk import process_pdf
+from bgts_case.agent.rag_pipeline.orchestrator import run_pipeline
+from bgts_case.agent.rag_pipeline.step1_chunk import process_pdf
 
 __all__ = ["run_pipeline", "process_pdf"]

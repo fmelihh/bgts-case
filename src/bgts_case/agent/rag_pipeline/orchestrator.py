@@ -18,10 +18,10 @@ from pathlib import Path
 import click
 from loguru import logger
 
-from bgts_case.agents.alerts import mock_slack_alert
-from bgts_case.agents.rag_pipeline import step1_chunk, step2_qdrant_index
+from bgts_case.agent.alerts import mock_slack_alert
+from bgts_case.agent.rag_pipeline import step1_chunk, step2_qdrant_index
 
-# Project layout: src/bgts_case/agents/rag_pipeline/orchestrator.py -> parents[4] = repo root.
+# Project layout: src/bgts_case/agent/rag_pipeline/orchestrator.py -> parents[4] = repo root.
 DEFAULT_KB_DIR = Path(__file__).resolve().parents[4] / "static" / "knowledge_base"
 
 
