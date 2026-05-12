@@ -10,11 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 from loguru import logger
-from openai import OpenAI
 from pydantic import BaseModel, ConfigDict
 from qdrant_client import models
 
-from bgts_case.agent.interfaces import make_openai_client, make_qdrant_client
+from bgts_case.agent.interfaces import make_embeddings, make_qdrant_client
 from bgts_case.agent.rag_pipeline.step2_qdrant_index import (
     COLLECTION_NAME,
     DENSE_DIM,
@@ -42,15 +41,6 @@ class RetrievedChunk(BaseModel):
     source_pdf_name: str | None = None
     chunk_type: str | None = None
     payload: dict[str, Any]
-
-
-def _embed_query(*, openai: OpenAI, text: str) -> list[float]:
-    resp = openai.embeddings.create(
-        model=DENSE_MODEL,
-        input=[text],
-        dimensions=DENSE_DIM,
-    )
-    return resp.data[0].embedding
 
 
 def _build_filter(
@@ -118,9 +108,9 @@ def search(
         return []
 
     qdrant = make_qdrant_client()
-    openai = make_openai_client()
+    embeddings = make_embeddings(model=DENSE_MODEL, dimensions=DENSE_DIM)
 
-    dense_vec = _embed_query(openai=openai, text=query)
+    dense_vec = embeddings.embed_query(query)
 
     query_filter = _build_filter(
         source_pdf_name=source_pdf_name,

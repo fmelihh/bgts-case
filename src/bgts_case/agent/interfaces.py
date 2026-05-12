@@ -39,8 +39,6 @@ def _chat_model_config() -> tuple[str, str, SecretStr]:
     )
 
 
-# Backwards-compatible exports.
-MODEL_PROVIDER_BASE_URL = FIREWORKS_BASE_URL
 DEFAULT_CHAT_MODEL = (
     secrets.local_model_name if secrets.run_as_a_local_model else FIREWORKS_CHAT_MODEL
 )
