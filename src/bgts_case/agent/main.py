@@ -6,8 +6,13 @@ from langchain.agents.middleware import (
     SummarizationMiddleware,
 )
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from loguru import logger
 
-from bgts_case.agent.interfaces import FALLBACK_CHAT_MODEL, make_chat_model
+from bgts_case.agent.interfaces import (
+    DEFAULT_CHAT_MODEL,
+    FALLBACK_CHAT_MODEL,
+    make_chat_model,
+)
 from bgts_case.agent.tools import retrieve_knowledge_base
 from bgts_case.secret import secrets
 
@@ -101,6 +106,10 @@ Yanıtı vermeden önce sessizce doğrula; karşılanmayan kural varsa düzelt:
 </içsel_kontrol>
 """
 
+logger.info(
+    f"agent.main: local_mode={secrets.run_as_a_local_model} "
+    f"primary_model={DEFAULT_CHAT_MODEL} fallback_model={FALLBACK_CHAT_MODEL}"
+)
 model = make_chat_model()
 fallback_model = make_chat_model(model=FALLBACK_CHAT_MODEL)
 
@@ -115,7 +124,12 @@ mcp_client = MultiServerMCPClient(
 
 
 async def _build_graph():
+    logger.info(f"agent.main: connecting to MCP at {secrets.mcp_server_url}")
     mcp_tools = await mcp_client.get_tools()
+    logger.info(
+        f"agent.main: loaded {len(mcp_tools)} MCP tools "
+        f"({[t.name for t in mcp_tools]})"
+    )
     tools = [*mcp_tools, retrieve_knowledge_base]
     return create_agent(
         model=model,
