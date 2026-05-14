@@ -218,10 +218,8 @@ def run(limit: int = 5) -> None:
             [",".join(c["metadata"]["related_tickets"]) for c in cases]
         )
 
-        aggregate_means: dict[str, float] = {}
         for col in metric_cols:
             mean = float(per_case_df[col].mean())
-            aggregate_means[_sanitize_metric_name(col)] = mean
             mlflow.log_metric(_sanitize_metric_name(col), mean)
 
         mlflow.log_table(per_case_df, "ragas_per_case.json")
